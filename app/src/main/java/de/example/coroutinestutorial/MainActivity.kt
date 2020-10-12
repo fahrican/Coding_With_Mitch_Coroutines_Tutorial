@@ -7,81 +7,68 @@ import android.widget.ProgressBar
 import android.widget.Toast
 import kotlinx.android.synthetic.main.activity_main.*
 import kotlinx.coroutines.*
+import kotlin.system.measureTimeMillis
 
 
 class MainActivity : AppCompatActivity() {
 
-    private val TAG: String = "AppDebug"
-    private val PROGRESS_MAX = 100
-    private val PROGRESS_START = 0
-    private val JOB_TIME = 4000 // ms
-    private lateinit var job: CompletableJob
+    private val RESULT_1 = "Result 1"
+    private val RESULT_2 = "Result 2"
+    private val JOB_TIMEOUT = 1900L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        job_button.setOnClickListener {
-            if (!::job.isInitialized) {
-                initJob()
-            }
-            job_progress_bar.startJobOrCancel(job)
+        main_btn.setOnClickListener {
+            setNewText("Click!")
+            fakeApiRequest()
         }
     }
 
-    private fun ProgressBar.startJobOrCancel(job: Job) {
-        if (this.progress > 0) {
-            println("$job is already active. Cancelling...")
-            resetJob()
-        } else {
-            job_button.text = "Cancel job #1"
-            CoroutineScope(Dispatchers.IO + job).launch {
-                println("coroutine $this is activated with job $job")
-                for (i in PROGRESS_START..PROGRESS_MAX) {
-                    delay((JOB_TIME / PROGRESS_MAX).toLong())
-                    this@startJobOrCancel.progress = i
+    private fun fakeApiRequest() {
+        CoroutineScope(Dispatchers.IO).launch {
+            val executionTime = measureTimeMillis {
+                val result1: Deferred<String> = async {
+                    println("debug: launching job1: ${Thread.currentThread().name}")
+                    getResult1fromApi()
                 }
-                updateJobCompleteTextView("Job is complete")
-            }
-        }
-    }
-
-    private fun updateJobCompleteTextView(text: String) {
-        GlobalScope.launch(Dispatchers.Main) {
-            job_complete_text.text = text
-        }
-    }
-
-    private fun resetJob() {
-        if (job.isActive || job.isCompleted) {
-            job.cancel(CancellationException("Resetting job"))
-        }
-        initJob()
-    }
-
-
-    private fun initJob() {
-        job_button.text = "Start Job #1"
-        updateJobCompleteTextView("")
-        job = Job()
-        job.invokeOnCompletion { throwable ->
-            throwable?.message.let {
-                var msg = it
-                if (msg.isNullOrBlank()) {
-                    msg = "Unknown cancellation error."
+                val result2: Deferred<String> = async {
+                    println("debug: launching job2: ${Thread.currentThread().name}")
+                    getResult2fromApi()
                 }
-                Log.e(TAG, "$job was cancelled. Reason: $msg")
-                showToast(msg)
+                setTextOnMainThread("Got ${result1.await()}")
+                setTextOnMainThread("Got ${result2.await()}")
             }
+            println("debug: total elapsed time: $executionTime")
         }
-        job_progress_bar.max = PROGRESS_MAX
-        job_progress_bar.progress = PROGRESS_START
     }
 
-    private fun showToast(text: String) {
-        GlobalScope.launch(Dispatchers.Main) {
-            Toast.makeText(this@MainActivity, text, Toast.LENGTH_SHORT).show()
+    private fun setNewText(input: String) {
+        val newText = main_text.text.toString() + "\n$input"
+        main_text.text = newText
+    }
+
+    private suspend fun setTextOnMainThread(input: String) {
+        withContext(Dispatchers.Main) {
+            setNewText(input)
         }
+    }
+
+    private suspend fun getResult1fromApi(): String {
+        logThread("getResult1fromApi")
+        delay(1000)
+        return RESULT_1
+    }
+
+    private suspend fun getResult2fromApi(): String {
+        logThread("getResult2fromApi")
+        delay(1700)
+        return RESULT_2
+    }
+
+    private fun logThread(methodName: String) {
+        println("debug: ${methodName}: ${Thread.currentThread().name}")
     }
 
 }
