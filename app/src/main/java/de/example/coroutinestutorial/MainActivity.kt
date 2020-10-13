@@ -28,19 +28,21 @@ class MainActivity : AppCompatActivity() {
 
     private fun fakeApiRequest() {
         CoroutineScope(Dispatchers.IO).launch {
+
             val executionTime = measureTimeMillis {
-                val result1: Deferred<String> = async {
+                val result1 = async {
                     println("debug: launching job1: ${Thread.currentThread().name}")
                     getResult1fromApi()
-                }
-                val result2: Deferred<String> = async {
+                }.await()
+
+                val result2 = async {
                     println("debug: launching job2: ${Thread.currentThread().name}")
-                    getResult2fromApi()
-                }
-                setTextOnMainThread("Got ${result1.await()}")
-                setTextOnMainThread("Got ${result2.await()}")
+                    getResult2fromApi(result1)
+                }.await()
+
+                println("debug: got result2: $result2")
             }
-            println("debug: total elapsed time: $executionTime")
+            println("debug: total elapsed time: $executionTime ms")
         }
     }
 
@@ -61,10 +63,13 @@ class MainActivity : AppCompatActivity() {
         return RESULT_1
     }
 
-    private suspend fun getResult2fromApi(): String {
+    private suspend fun getResult2fromApi(result1: String): String {
         logThread("getResult2fromApi")
         delay(1700)
-        return RESULT_2
+        if (result1 == "Result #1") {
+            return RESULT_2
+        }
+        throw CancellationException("Result #1 was incorrect...")
     }
 
     private fun logThread(methodName: String) {
